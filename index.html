@@ -184,7 +184,7 @@ details.card-s[open] summary::after { content: "−"; }
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-.tabs-in { max-width: 480px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); height: var(--tab-h); }
+.tabs-in { max-width: 480px; margin: 0 auto; display: grid; grid-template-columns: repeat(6, 1fr); height: var(--tab-h); }
 .tab { appearance: none; border: 0; background: transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 500; color: var(--faint); }
 .tab svg { width: 24px; height: 24px; }
 .tab[aria-current="page"] { color: var(--accent); }
@@ -408,6 +408,11 @@ details.card-s[open] summary::after { content: "−"; }
 .btn-col { display: grid; gap: 8px; }
 .ver { text-align: center; font-size: 12px; color: var(--faint); padding: 4px 0 8px; }
 
+/* 복습 범위 고르기 (이름과 개수 두 줄) */
+.seg.seg-n button { min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; font-size: 15px; line-height: 1.2; }
+.seg.seg-n small { font-size: 13px; font-weight: 500; color: var(--faint); font-variant-numeric: tabular-nums; }
+.seg.seg-n button[aria-pressed="true"] small { color: var(--accent); }
+
 #app { padding-top: calc(env(safe-area-inset-top, 0px) + 6px); }
 </style>
 </head>
@@ -423,6 +428,10 @@ details.card-s[open] summary::after { content: "−"; }
     <button class="tab" data-act="tab" data-v="home" aria-current="page">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18h16"/><path d="M7 18a5 5 0 0 1 10 0"/><path d="M12 6v3M5.6 9.6l1.8 1.8M18.4 9.6l-1.8 1.8"/></svg>
       <span>오늘</span>
+    </button>
+    <button class="tab" data-act="tab" data-v="review">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12a7.5 7.5 0 0 1-13.2 4.9"/><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.9"/><path d="M18 3.5v3.8h-3.8"/><path d="M6 20.5v-3.8h3.8"/></svg>
+      <span>복습</span>
     </button>
     <button class="tab" data-act="tab" data-v="book">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h10.5A3.5 3.5 0 0 1 19 8v12H8.5A3.5 3.5 0 0 1 5 16.5z"/><path d="M5 16.5A3.5 3.5 0 0 1 8.5 13H19"/></svg>
@@ -459,7 +468,8 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
  *     외웠다 → 3일 뒤 복습 → 외웠다 → 7일째 복습 → 외웠다 → 완전히 외운 단어
  *     못 외웠다 / 체크 안 함 → 다음 날 다시 나옴 (복습 단어를 못 외우면 처음부터 다시)
  * - 다시 볼 단어가 너무 많이 밀리면 그날 새 단어 수를 줄인다 (하루 총량 ≈ 새 단어 수 × 3).
- * - 단어장은 1~7단계로 나뉜다. 새 단어는 '지금 단계' 이상에서 쉬운 순서대로 고른다. '아는 단어'(k)는 건너뛴다.
+ * - 단어장은 1~7단계로 나뉜다. 새 단어는 1단계부터 순서대로 고르고, 한 단계를 다 배우면 다음 단계로 넘어간다.
+ *   시험 점수로 단계를 건너뛰지 않는다. '아는 단어'(k)만 건너뛴다.
  * - '계속 보기'로 표시한 단어(flags)는 외운 뒤에도 매일 '다시 볼 단어'로 나온다. 진도(복습 날짜)는 바꾸지 않는다.
  * - 같은 기록이면 언제 계산해도 같은 결과가 나온다 (시각·난수를 쓰지 않음).
  *
@@ -499,6 +509,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     if (!s.days || typeof s.days !== "object") s.days = {};
     if (!s.log || typeof s.log !== "object") s.log = {};
     if (!s.flags || typeof s.flags !== "object") s.flags = {};
+    if (!s.seen || typeof s.seen !== "object") s.seen = {};
     if (!s.v) s.v = 1;
     // 단어 목록이 줄어든 뒤 불러온 기록에 없는 번호가 있으면 버린다
     Object.keys(s.words).forEach(function (k) { if (!(+k >= 0 && +k < WORD_COUNT)) delete s.words[k]; });
@@ -569,6 +580,12 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
       if (!s.words[id] && levelOf(id) >= s.level) out.push(id);
     }
     return out;
+  }
+  // 지금 배우고 있는 단계: 아직 배우지 않은 첫 단어의 단계 (모두 배웠으면 7)
+  function frontier(state) {
+    var w = (state && state.words) || {};
+    for (var k = 0; k < ORDER.length; k++) if (!w[ORDER[k]]) return levelOf(ORDER[k]);
+    return MAX_LEVEL;
   }
   function introduce(s, ids, today) {
     ids.forEach(function (id) { s.words[id] = { s: "l", in: today }; if (id + 1 > s.nextNew) s.nextNew = id + 1; });
@@ -714,7 +731,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
   }
 
   var P = {
-    WORD_COUNT: WORD_COUNT, PER_DAY: PER_DAY, MAX_LEVEL: MAX_LEVEL, levelOf: levelOf,
+    WORD_COUNT: WORD_COUNT, PER_DAY: PER_DAY, MAX_LEVEL: MAX_LEVEL, levelOf: levelOf, frontier: frontier,
     studyDay: studyDay, kstHour: kstHour, addDays: addDays,
     diffDays: diffDays, emptyState: emptyState, normalize: normalize, applyDay: applyDay, fold: fold,
     plan: plan, replanToday: replanToday, markKnown: markKnown, unmarkKnown: unmarkKnown,
@@ -737,7 +754,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
   "use strict";
   var W = window.WORDS, CATS = window.CATS, P = window.Planner;
   // W[id] = [영어, 한국어 뜻, 단어 구성, 분류 번호, 영어 예문, 한국어 해석, 단계]
-  var VERSION = "20261108-4a24762";
+  var VERSION = "20261108-cc562e2";
   var KIND = { "new": "새 단어", again: "다시 보기", review: "복습", keep: "계속 보기" };
   var LEVEL_NAMES = { 1: "구성 요소", 2: "몸의 구조와 방향", 3: "계통별 용어", 4: "증상·진단·검사", 5: "수술·처치·약물", 6: "의학 약어", 7: "보건의료 행정" };
   function lvName(l) { return l + "단계 · " + LEVEL_NAMES[l]; }
@@ -831,10 +848,27 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     S = P.normalize(raw && typeof raw === "object" ? raw : P.emptyState(today));
     NOTES = readJSON(NOTES_KEY) || {};
     M = readJSON(META_KEY) || {};
+    migrate();
     ensurePlanNow();
     if (!canStore) { notice = "이 브라우저에서는 기록을 저장할 수 없어요. 개인정보 보호 브라우징을 끄고 다시 열어 주세요."; }
     // 저장 공간을 지우지 말아 달라고 브라우저에 부탁한다 (지원하는 곳에서만)
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) { /* 무시 */ }
+  }
+  // 예전 버전에서 수준 테스트로 단계를 건너뛰었다면 되돌린다 (한 번만).
+  // 테스트에서 맞혀서 '아는 단어'로 빠진 단어는 다시 배울 단어로, 단계는 1단계부터 순서대로.
+  function migrate() {
+    if (S.mig >= 2) return;
+    if (S.placement && S.placement.on) {
+      Object.keys(S.words).forEach(function (k) { var w = S.words[k]; if (w.s === "k" && w.k === S.placement.on) delete S.words[k]; });
+    }
+    if (S.level > 1) {
+      S.level = 1;
+      var d = S.days[today];
+      if (d && Array.isArray(d.newIds) && !d.cards && !d.quiz && !Object.keys(d.checks || {}).length) S = P.replanToday(S, today, S.settings.newPerDay).state;
+    }
+    delete S.placement;
+    S.mig = 2;
+    writeAll();
   }
   // 같은 폰의 다른 탭에서 바꾼 기록을 받아 온다.
   window.addEventListener("storage", function (e) {
@@ -851,7 +885,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     if (d === today || !S) return;
     today = d;
     ensurePlanNow();
-    ui = { view: ui.view === "records" || ui.view === "settings" || ui.view === "spell" || ui.view === "book" ? ui.view : "home" };
+    ui = { view: ui.view === "records" || ui.view === "settings" || ui.view === "spell" || ui.view === "book" || ui.view === "review" ? ui.view : "home" };
     render();
   }
   setInterval(checkDay, 30000);
@@ -991,33 +1025,39 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     }
     return out;
   }
-  // 오늘 단어의 구성 요소 중 1단계에 있는 조각의 뜻을 묻는다 (예: gastritis의 -itis → 염증).
-  function partQuestions(ids, n) {
-    var cand = [], seen = {}, inToday = {};
-    ids.forEach(function (id) { inToday[id] = 1; });
-    shuffle(ids.slice()).forEach(function (id) {
-      breakdown(id).parts.forEach(function (p) {
-        var pid = L1[p[0].toLowerCase()];
-        if (pid === undefined || pid === id || seen[pid] || inToday[pid]) return;
-        seen[pid] = 1;
-        cand.push({ id: pid, from: id });
-      });
-    });
-    return shuffle(cand).slice(0, n);
+  /* ---------- 카드로 본 단어 ---------- */
+  // 카드(또는 저녁 체크 카드)에 한 번이라도 나온 단어. 퀴즈와 복습에는 이 단어만 나온다.
+  // 이 기록이 생기기 전의 공부: 어제까지 배운 단어와 외운 단어는 본 것으로 친다.
+  function seenCard(id) {
+    if (S.seen && S.seen[id]) return true;
+    var w = S.words[id];
+    if (!w || w.s === "k") return false;
+    if (w.s === "r" || w.s === "m") return true;
+    return !!(w.in && w.in < today);
   }
-  function partCap(n) { return Math.min(8, Math.ceil(n / 4)); }
-  function quizCount(ids) {
-    var seen = {}, inToday = {}, n = 0;
-    ids.forEach(function (id) { inToday[id] = 1; });
+  function markSeen(id) {
+    if (!S.seen) S.seen = {};
+    if (S.seen[id]) return;
+    S.seen[id] = 1;
+    writeAll();
+  }
+  // 퀴즈에 섞는 구성 요소 문제: 이미 카드로 배운 1단계 조각만 묻는다 (예: 배운 -itis → 염증).
+  function partCands(ids) {
+    var cand = [], used = {}, inSet = {};
+    ids.forEach(function (id) { inSet[id] = 1; });
     ids.forEach(function (id) {
       breakdown(id).parts.forEach(function (p) {
         var pid = L1[p[0].toLowerCase()];
-        if (pid === undefined || pid === id || seen[pid] || inToday[pid]) return;
-        seen[pid] = 1; n++;
+        if (pid === undefined || pid === id || used[pid] || inSet[pid] || !seenCard(pid)) return;
+        used[pid] = 1;
+        cand.push({ id: pid, from: id });
       });
     });
-    return ids.length + Math.min(n, partCap(ids.length));
+    return cand;
   }
+  function partCap(n) { return Math.min(8, Math.ceil(n / 4)); }
+  function partQuestions(ids, n) { return shuffle(partCands(shuffle(ids.slice()))).slice(0, n); }
+  function quizCount(ids) { return ids.length + Math.min(partCands(ids).length, partCap(ids.length)); }
   // 구성 요소 문제에서 "~에 들어 있어요"에 쓸 단어 (1단계 조각이면 예시 단어)
   function fromWord(id) { var b = breakdown(id); return W[id][6] === 1 && b.result ? b.result[0] : W[id][0]; }
   function question(q) { return { id: q.id, from: q.from === undefined ? -1 : q.from, opts: shuffle([q.id].concat(distractors(q.id))) }; }
@@ -1055,7 +1095,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     if (ids.length === 1) toast("아는 단어로 뺐어요: " + W[ids[0]][0] + (added.length ? " · 새로 넣은 단어: " + W[added[0]][0] : ""), restore);
     else toast(ids.length + "개를 아는 단어로 뺐어요." + (added.length ? " 오늘 새 단어 " + added.length + "개를 다음 단어로 채웠어요." : ""), restore);
   }
-  var STUDY_VIEWS = { cards: 1, quiz: 1, check: 1, known: 1, test: 1 };
+  var STUDY_VIEWS = { cards: 1, quiz: 1, check: 1, known: 1 };
   function updateTabs() {
     $tabs.hidden = !!STUDY_VIEWS[ui.view] || !S;
     var cur = ui.view === "marks" || ui.view === "backup" || ui.view === "install" ? "settings" : ui.view;
@@ -1073,7 +1113,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     else if (ui.view === "quiz") html = quizHTML();
     else if (ui.view === "check") html = checkHTML();
     else if (ui.view === "known") html = knownHTML();
-    else if (ui.view === "test") html = testHTML();
+    else if (ui.view === "review") html = reviewHTML();
     else if (ui.view === "spell") html = spellHTML();
     else if (ui.view === "marks") html = marksHTML();
     else if (ui.view === "book") html = bookHTML();
@@ -1116,7 +1156,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     var allChecked = its.length > 0 && checked === its.length;
     var primary = allChecked ? "" : evening ? "check" : (!d.cards ? "cards" : (!d.quiz ? "quiz" : "check"));
     var head = '<header class="hdr"><span class="hdr-date">' + longDate(today) + "</span><h1>오늘의 단어</h1>" +
-      '<button class="lvchip" data-act="tab" data-v="settings">' + lvName(S.level) + "</button></header>";
+      '<button class="lvchip" data-act="tab" data-v="records">' + lvName(P.frontier(S)) + "</button></header>";
     var top = installCardHTML() + backupCardHTML();
     if (!its.length) return head + top + '<section class="card-s"><p class="p">오늘은 공부할 단어가 없어요.</p></section>' + recordCard(st);
 
@@ -1131,8 +1171,9 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
       return '<button class="cell' + (now ? " now" : "") + '" data-act="go" data-v="' + key + '"><span class="cell-t">' + title + "</span>" +
         '<span class="cell-v">' + (now ? '<span class="pill">지금</span>' : value) + "</span>" + ICON_NEXT + "</button>";
     }
-    var quizN = d.quiz ? d.quiz.right + " / " + d.quiz.total : quizCount(its.map(function (x) { return x.id; })) + "문제";
-    return head + top + testCtaHTML() + adaptHTML() +
+    var seenIds = its.filter(function (x) { return seenCard(x.id); }).map(function (x) { return x.id; });
+    var quizN = d.quiz ? d.quiz.right + " / " + d.quiz.total : seenIds.length ? quizCount(seenIds) + "문제" : "카드 먼저";
+    return head + top + adaptHTML() +
       '<section class="card-s" aria-label="오늘의 단어">' +
         '<div class="counts"><div class="count new"><b>' + nNew + '</b><span>새 단어</span></div><div class="count"><b>' + nAgain + "</b><span>다시 볼 단어</span></div></div>" +
         (meta.length ? '<p class="meta">' + meta.join(" · ") + "</p>" : "") +
@@ -1150,11 +1191,6 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     return '<button class="card-s rec" data-act="tab" data-v="records" aria-label="기록 보기">' +
       '<span class="rec-nums"><span><b>' + st.streak + "</b>일 연속</span><span><b>" + st.learned + "</b>개 외움</span></span>" +
       weekHTML(st.week, false) + "</button>";
-  }
-  function testCtaHTML() {
-    if (S.placement && S.placement.v) return "";
-    return '<section class="card-s soft"><h2 class="card-h">내 수준부터 정해요</h2><p class="meta">단계마다 5문제 · 5분쯤</p>' +
-      '<div class="btn-row"><button class="btn" data-act="tskip">건너뛰기</button><button class="btn primary" data-act="go" data-v="test">테스트 시작</button></div></section>';
   }
   // 아이폰 Safari에서 열었을 때: 홈 화면에 추가하는 방법
   function installSteps() {
@@ -1188,7 +1224,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
   /* ---------- 공부 화면 틀 ---------- */
   function studyShell(mid, right, progress, body, foot, footCls, bodyCls) {
     return '<div class="study"><div class="study-in">' +
-      '<header class="study-top"><button class="back" data-act="tab" data-v="home">' + ICON_BACK + "오늘</button>" +
+      '<header class="study-top"><button class="back" data-act="tab" data-v="' + (ui.from || "home") + '">' + ICON_BACK + (ui.from === "review" ? "복습" : "오늘") + "</button>" +
       '<span class="mid">' + mid + '</span><span class="right">' + (right || "") + "</span></header>" +
       (progress !== null ? '<div class="progress"><i style="width:' + progress + '%"></i></div>' : "") +
       '<div class="study-body' + (bodyCls ? " " + bodyCls : "") + '">' + body + "</div>" +
@@ -1207,18 +1243,21 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
   }
 
   /* ---------- 카드 ---------- */
+  function cardList() { return ui.cards && ui.cards.list ? ui.cards.list : items(); }
   function cardsHTML() {
-    var its = items(), c = ui.cards;
+    var its = cardList(), c = ui.cards, rv = !!c.list;
     if (!its.length) return studyShell("카드", "", null, '<p class="p">오늘은 볼 카드가 없어요.</p>', "", "", "center");
     if (c.done) {
       return studyShell("카드", "", 100,
         '<div class="done-h"><span class="big">' + its.length + '</span><h2>장을 다 봤어요</h2></div>',
-        '<button class="btn" data-act="go" data-v="cards">처음부터</button><button class="btn primary" data-act="go" data-v="quiz">퀴즈 풀기</button>', "wide", "center");
+        '<button class="btn" data-act="cagain">처음부터</button><button class="btn primary" data-act="' + (rv ? "rvquiz" : "go") + '" data-v="quiz">퀴즈 풀기</button>', "wide", "center");
     }
     if (c.i >= its.length) c.i = its.length - 1;
     var it = its[c.i];
-    return studyShell((c.i + 1) + " / " + its.length, '<span class="tag ' + it.kind + '">' + KIND[it.kind] + "</span>", (c.i / its.length * 100),
-      wordCard(it.id, c.show) + wordActs(it.id) + memoEditor(it.id),
+    markSeen(it.id);
+    var tag = rv ? '<span class="tag ' + ({ l: "again", r: "review", m: "keep" }[(S.words[it.id] || {}).s] || "") + '">' + wordStatus(it.id)[1] + "</span>" : '<span class="tag ' + it.kind + '">' + KIND[it.kind] + "</span>";
+    return studyShell((c.i + 1) + " / " + its.length, tag, (c.i / its.length * 100),
+      wordCard(it.id, c.show) + wordActs(it.id, rv) + memoEditor(it.id),
       '<button class="btn" data-act="prev"' + (c.i === 0 ? " disabled" : "") + ">이전</button>" +
       '<button class="btn primary" data-act="' + (c.show ? "next" : "flip") + '">' + (c.show ? (c.i === its.length - 1 ? "다 봤어요" : "다음 단어") : "뜻 보기") + "</button>", "wide", "center");
   }
@@ -1226,7 +1265,8 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
   /* ---------- 퀴즈 ---------- */
   function quizHTML() {
     var q = ui.quiz;
-    if (!q.qs.length) return studyShell("퀴즈", "", null, '<p class="p">오늘은 퀴즈로 풀 단어가 없어요.</p>', "", "", "center");
+    if (!q.qs.length) return studyShell("퀴즈", "", null, '<div class="done-h"><h2>카드로 먼저 외워요</h2><p class="p">카드에서 본 단어만 퀴즈에 나와요.</p></div>',
+      '<button class="btn primary" data-act="go" data-v="cards">카드로 외우기</button>', "", "center");
     if (q.done) {
       var wrongRows = q.wrongQs.map(function (x) {
         return '<div class="row"><div class="row-l"><span class="w" lang="en">' + esc(W[x.id][0]) + '</span><span class="m">' + esc(W[x.id][1]) +
@@ -1236,7 +1276,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
         '<div class="done-h"><span class="big">' + q.right + " / " + q.qs.length + "</span><h2>" + (q.right === q.qs.length ? "모두 맞혔어요" : q.qs.length + "문제 중 " + q.right + "개 맞혔어요") + "</h2></div>" +
         (q.wrongQs.length ? '<h2 class="sec-label">틀린 문제</h2><div class="rows">' + wrongRows + "</div>" : ""),
         (q.wrongQs.length ? '<button class="btn" data-act="qretry">틀린 것만 다시</button>' : '<button class="btn" data-act="go" data-v="quiz">다시 풀기</button>') +
-        '<button class="btn primary" data-act="go" data-v="check">저녁 체크</button>', "two", q.wrongQs.length ? "" : "center");
+        (q.review ? '<button class="btn primary" data-act="tab" data-v="review">복습으로</button>' : '<button class="btn primary" data-act="go" data-v="check">저녁 체크</button>'), "two", q.wrongQs.length ? "" : "center");
     }
     var cur = q.qs[q.i], w = W[cur.id], picked = q.picked >= 0, isPart = cur.from >= 0;
     var opts = cur.opts.map(function (oid, k) {
@@ -1299,6 +1339,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     var idx = nextUnchecked(c.i);
     c.i = idx;
     var it = its[idx];
+    markSeen(it.id);
     var quizWrong = d.quiz && d.quiz.wrong && d.quiz.wrong.indexOf(it.id) >= 0;
     return studyShell("체크 " + checked + " / " + its.length, listBtn, checked / its.length * 100,
       wordCard(it.id, c.show, '<span class="tag ' + it.kind + '">' + KIND[it.kind] + "</span>", quizWrong ? '<span class="note">오늘 퀴즈에서 틀린 단어예요</span>' : "") +
@@ -1341,111 +1382,6 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
       '<button class="btn primary" data-act="kapply"' + (sel ? "" : " disabled") + ">" + (sel ? sel + "개 빼기" : "아는 단어를 고르세요") + "</button>", "", "");
   }
 
-  /* ---------- 수준 테스트 ---------- */
-  // 단계마다 아직 공부하지 않은 단어 5개를 4지선다로 묻는다. 4개 이상 맞히면 다음 단계로, 아니면 거기서 멈춘다.
-  // 멈춘 단계가 '시작 단계'가 되고, 그보다 쉬운 단계는 건너뛴다. 단계 시험(single)은 다음 단계 하나만 본다.
-  var TEST_N = 5;
-  function testPool(L) {
-    var out = [];
-    for (var id = 0; id < W.length; id++) {
-      if (W[id][6] !== L) continue;
-      var w = S.words[id];
-      if (!w || w.s === "l") out.push(id);
-    }
-    return out;
-  }
-  function passed(r) { var n = r.right.length + r.wrong.length; return n > 0 && r.right.length >= Math.ceil(n * 0.8); }
-  function nextTestLevel(t) {
-    while (t.lv <= t.maxLv) {
-      var pool = testPool(t.lv);
-      if (pool.length >= 3) {
-        t.qs = shuffle(pool).slice(0, TEST_N).map(function (id) { return { id: id, opts: shuffle([id].concat(distractors(id))) }; });
-        t.qi = 0;
-        return true;
-      }
-      t.lv++;
-    }
-    return false;
-  }
-  function finishTest(t) {
-    t.done = true;
-    var lvls = Object.keys(t.res).map(Number).sort(function (a, b) { return a - b; });
-    if (t.single) {
-      t.pass = !!(t.res[t.lv] && passed(t.res[t.lv]));
-      t.start = t.pass ? t.lv : S.level;
-      return;
-    }
-    var start = null;
-    for (var i = 0; i < lvls.length; i++) if (!passed(t.res[lvls[i]])) { start = lvls[i]; break; }
-    if (start === null) start = lvls.length ? Math.min(P.MAX_LEVEL, lvls[lvls.length - 1] + 1) : 1;
-    t.start = start;
-  }
-  function startTest(single) {
-    var from = single ? Math.min(P.MAX_LEVEL, S.level + 1) : 1;
-    var t = { lv: from, maxLv: single ? from : P.MAX_LEVEL, single: !!single, qs: [], qi: 0, res: {}, done: false, asked: 0, right: 0, start: S.level };
-    ui = { view: "test", test: t };
-    if (!nextTestLevel(t)) finishTest(t);
-  }
-  function answerTest(correct) {
-    var t = ui.test, q = t.qs[t.qi];
-    var r = t.res[t.lv] || (t.res[t.lv] = { right: [], wrong: [] });
-    (correct ? r.right : r.wrong).push(q.id);
-    t.asked++;
-    if (correct) t.right++;
-    if (t.qi < t.qs.length - 1) { t.qi++; return; }
-    if (!passed(r) || t.lv >= t.maxLv) { finishTest(t); return; }
-    t.lv++;
-    if (!nextTestLevel(t)) finishTest(t);
-  }
-  function testCorrectIds(t) {
-    var ids = [];
-    Object.keys(t.res).forEach(function (l) { ids = ids.concat(t.res[l].right); });
-    return ids;
-  }
-  function skippedCount(start, correct) {
-    var n = 0, c = {};
-    correct.forEach(function (id) { c[id] = 1; });
-    for (var id = 0; id < W.length; id++) if (W[id][6] < start && !S.words[id] && !c[id]) n++;
-    return n;
-  }
-  function testHTML() {
-    var t = ui.test;
-    if (t.done) {
-      if (t.single) {
-        var r1 = t.res[t.lv], n1 = r1 ? r1.right.length + r1.wrong.length : 0;
-        return studyShell("단계 시험", "", 100,
-          '<div class="done-h"><span class="big">' + (r1 ? r1.right.length : 0) + " / " + n1 + "</span><h2>" +
-          (t.pass ? t.lv + "단계로 올라갈 수 있어요" : "아직은 " + S.level + "단계가 잘 맞아요") + '</h2><p class="p">' +
-          (t.pass ? "올라가면 " + S.level + "단계에 남은 단어는 건너뛰어요. 나중에 단계를 내리면 다시 나와요." : "며칠 더 공부하고 다시 도전해 보세요.") + "</p></div>",
-          t.pass ? '<button class="btn" data-act="tab" data-v="home">그대로 있기</button><button class="btn primary" data-act="tapply">' + t.lv + "단계로 올라가기</button>"
-                 : '<button class="btn primary" data-act="tapply">확인</button>', t.pass ? "wide" : "", "center");
-      }
-      var lvls = Object.keys(t.res).map(Number).sort(function (a, b) { return a - b; });
-      var rows = lvls.map(function (l) {
-        var r = t.res[l], n = r.right.length + r.wrong.length, ok = passed(r);
-        return '<div class="row"><div class="row-l"><span class="w ko">' + lvName(l) + '</span><span class="m">' + r.right.length + " / " + n + " 맞힘</span></div>" +
-          '<span class="tag ' + (ok ? "" : "again") + '">' + (ok ? "통과" : "아직") + "</span></div>";
-      }).join("");
-      var correct = testCorrectIds(t);
-      var skip = skippedCount(t.start, correct);
-      return studyShell("테스트 결과", "", 100,
-        '<div class="done-h"><span class="mini">내 시작 단계</span><span class="big">' + t.start + "단계</span><h2>" + LEVEL_NAMES[t.start] + "부터 시작해요</h2></div>" +
-        '<div class="stepper"><button data-act="tstart" data-v="-1"' + (t.start <= 1 ? " disabled" : "") + ' aria-label="한 단계 낮추기">−</button>' +
-          '<div class="val"><b>' + t.start + "단계</b><span>직접 바꿀 수 있어요</span></div>" +
-          '<button data-act="tstart" data-v="1"' + (t.start >= P.MAX_LEVEL ? " disabled" : "") + ' aria-label="한 단계 높이기">+</button></div>' +
-        '<div class="summary">' + (t.start > 1 ? "<p>1~" + (t.start - 1) + "단계의 남은 단어 " + skip + "개는 건너뛰어요.</p>" : "") +
-          "<p>맞힌 단어 " + correct.length + "개는 아는 단어로 빼요.</p></div>" +
-        (rows ? '<div class="rows">' + rows + "</div>" : ""),
-        '<button class="btn" data-act="tagain">다시 하기</button><button class="btn primary" data-act="tapply">' + t.start + "단계부터 시작</button>", "wide", "");
-    }
-    var q = t.qs[t.qi], w = W[q.id];
-    var opts = q.opts.map(function (oid, k) { return '<button class="choice" data-act="tpick" data-v="' + k + '"><span class="n">' + (k + 1) + "</span><span>" + esc(W[oid][1]) + "</span></button>"; }).join("");
-    var prog = t.single ? t.qi / t.qs.length * 100 : (t.lv - 1) / P.MAX_LEVEL * 100;
-    return studyShell(t.single ? "단계 시험" : "수준 테스트", '<button class="back" data-act="tstop">그만하기</button>', Math.round(prog),
-      '<div class="q-head"><span class="mini">' + lvName(t.lv) + " · " + (t.qi + 1) + " / " + t.qs.length + '</span><div class="word' + wordSize(w[0]) + '" lang="en">' + esc(w[0]) + "</div></div>" +
-      '<div class="choices">' + opts + '<button class="btn" data-act="tpick" data-v="-1">모르겠어요</button></div>', "", "", "end");
-  }
-
   /* ---------- 공부하면서 난이도 조절 ---------- */
   // 최근 3일(새 단어를 5개 이상 체크한 날)의 '외웠다' 비율로 판단한다.
   function perfSignal() {
@@ -1459,23 +1395,17 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
       if (c.length >= 5) out.push(c.filter(function (id) { return dd.checks[id] === "y"; }).length / c.length);
     });
     if (out.length < 3) return null;
-    if (out.every(function (r) { return r >= 0.9; }) && S.level < P.MAX_LEVEL) return "easy";
-    if (out.every(function (r) { return r < 0.5; }) && (S.level > 1 || S.settings.newPerDay > P.PER_DAY[0])) return "hard";
+    if (out.every(function (r) { return r < 0.5; }) && S.settings.newPerDay > P.PER_DAY[0]) return "hard";
     return null;
   }
   function lowerPerDay() { return P.PER_DAY.filter(function (n) { return n < S.settings.newPerDay; }).pop(); }
   function adaptHTML() {
     var sig = perfSignal();
-    if (sig === "easy") {
-      return '<section class="card-s soft"><h2 class="card-h">요즘 쉬워 보여요</h2><p class="meta">3일 연속 새 단어를 거의 다 외웠어요</p>' +
-        '<div class="btn-row"><button class="btn" data-act="snooze">나중에</button><button class="btn primary" data-act="go" data-v="testup">' + (S.level + 1) + "단계 시험</button></div></section>";
-    }
     if (sig === "hard") {
       var lower = lowerPerDay();
       var a = lower ? '<button class="btn" data-act="easier" data-v="perday">하루 ' + lower + "개로</button>" : "";
-      var b = S.level > 1 ? '<button class="btn" data-act="easier" data-v="level">' + (S.level - 1) + "단계로</button>" : "";
       return '<section class="card-s soft"><h2 class="card-h">조금 어려워 보여요</h2><p class="meta">3일 연속 새 단어를 절반도 못 외웠어요</p>' +
-        '<div class="btn-row" style="grid-template-columns:' + (a && b ? "1fr 1fr" : "1fr") + '">' + a + b + "</div>" +
+        '<div class="btn-row" style="grid-template-columns:1fr">' + a + "</div>" +
         '<button class="link" data-act="snooze">이대로 할게요</button></section>';
     }
     return "";
@@ -1518,9 +1448,10 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
       else if (st.s === "k") o.known++;
       else if (st.s === "l") o.learning++;
     });
+    var cur = P.frontier(S);
     function rung(l) {
       var o = per[l], pc = function (n) { return (n / o.total * 100).toFixed(1) + "%"; };
-      return '<div class="rung' + (l === S.level ? " now" : "") + '"><span class="nm"><b>' + l + "단계</b>" + LEVEL_NAMES[l] + "</span>" +
+      return '<div class="rung' + (l === cur ? " now" : "") + '"><span class="nm"><b>' + l + "단계</b>" + LEVEL_NAMES[l] + "</span>" +
         '<div class="bar"><i class="ok" style="width:' + pc(o.done) + '"></i><i class="kn" style="width:' + pc(o.known) + '"></i><i class="soft" style="width:' + pc(o.learning) + '"></i></div>' +
         '<span class="ct">' + (o.done + o.known) + " / " + o.total + "</span></div>";
     }
@@ -1537,12 +1468,8 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     return '<header class="hdr"><h1>설정</h1></header>' +
       '<h2 class="sec-label">하루 새 단어</h2>' +
       '<section class="card-s"><div class="seg" role="group" aria-label="하루 새 단어 수">' + perDay + "</div></section>" +
-      '<h2 class="sec-label">단계</h2>' +
-      '<section class="card-s"><div class="stepper"><button data-act="lvl" data-v="-1"' + (S.level <= 1 ? " disabled" : "") + ' aria-label="한 단계 내리기">−</button>' +
-        '<div class="val"><b>' + S.level + "단계</b><span>" + LEVEL_NAMES[S.level] + "</span></div>" +
-        '<button data-act="lvl" data-v="1"' + (S.level >= P.MAX_LEVEL ? " disabled" : "") + ' aria-label="한 단계 올리기">+</button></div></section>' +
-      '<div class="group">' +
-        link("수준 테스트", S.placement && S.placement.level ? md(S.placement.on) : "", "go", "test") +
+      '<h2 class="sec-label">단어</h2>' +
+      '<div class="group">' + row("지금 배우는 단계", lvName(P.frontier(S))) +
         link("아는 단어", knownCount() + "개", "go", "known") +
         link("계속 보는 단어", flagIds().length + "개", "go", "marks-keep") +
         link("메모", noteIds().length + "개", "go", "marks-memo") +
@@ -1557,11 +1484,13 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
         (isIOS && !standalone ? link("홈 화면에 추가", "", "go", "install") : "") + "</div>" +
       '<details class="card-s"><summary>공부 규칙</summary><ul class="rules">' +
         "<li>하루는 한국 시간 새벽 6시에 바뀌어요. 앱을 열면 오늘의 단어가 정해져요.</li>" +
+        "<li>새 단어는 1단계부터 순서대로 나와요. 한 단계를 다 배우면 다음 단계로 넘어가요. 퀴즈를 다 맞혀도 단계를 건너뛰지 않아요.</li>" +
         "<li>못 외운 단어와 체크하지 않은 단어는 다음 날 다시 나와요.</li>" +
         "<li>외운 단어는 3일 뒤, 7일 뒤에 복습으로 나와요. 둘 다 외우면 ‘완전히 외움’이에요.</li>" +
         "<li>다시 볼 단어가 많이 밀리면 그날 새 단어를 줄여요. 하루 총량은 새 단어 수의 3배쯤이에요.</li>" +
-        "<li>3일 연속 거의 다 외우면 다음 단계 시험을, 많이 어려워하면 새 단어 줄이기나 단계 내리기를 제안해요.</li>" +
-        "<li>퀴즈에는 오늘 단어의 구성 요소(접두사·접미사·결합형) 뜻을 묻는 문제가 섞여 나와요.</li>" +
+        "<li>3일 연속 새 단어를 절반도 못 외우면 하루 새 단어 줄이기를 제안해요.</li>" +
+        "<li>퀴즈에는 카드로 본 단어만 나와요. 이미 배운 구성 요소(접두사·접미사·결합형)의 뜻을 묻는 문제가 섞여 나와요.</li>" +
+        "<li>복습 탭에서는 지금까지 카드로 배운 단어를 다시 볼 수 있어요. 복습 탭에서 한 공부는 복습 날짜를 바꾸지 않아요.</li>" +
         "<li>공부 기록은 이 휴대폰에만 저장돼요. 휴대폰을 바꾸거나 Safari 방문 기록과 웹사이트 데이터를 지우기 전에 백업을 내보내세요.</li>" +
       "</ul></details>" +
       '<p class="ver">버전 ' + esc(VERSION) + "</p>";
@@ -1579,11 +1508,11 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     saveNotes();
   }
   function memoView(id) { var t = noteOf(id); return t ? '<div class="memo">' + esc(t) + "</div>" : ""; }
-  function wordActs(id) {
+  function wordActs(id, noKnown) {
     var f = isFlagged(id);
     return '<div class="w-acts"><button class="w-act" data-act="flag" data-v="' + id + '" aria-pressed="' + f + '" type="button">' + (f ? "계속 보는 중" : "계속 보기") + "</button>" +
       '<button class="w-act" data-act="memo" data-v="' + id + '" aria-pressed="' + (memoFor === id) + '" type="button">' + (noteOf(id) ? "메모 수정" : "메모") + "</button>" +
-      '<button class="w-act" data-act="known1" data-v="' + id + '" type="button">이미 알아요</button></div>';
+      (noKnown ? "" : '<button class="w-act" data-act="known1" data-v="' + id + '" type="button">이미 알아요</button>') + "</div>";
   }
   function memoEditor(id) {
     if (memoFor !== id) return "";
@@ -1606,6 +1535,51 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     var empty = keepTab ? "카드나 단어장에서 ‘계속 보기’를 누르면 여기에 모여요." : "카드나 단어장에서 ‘메모’를 누르면 여기에 모여요.";
     return '<header class="hdr"><button class="link" data-act="tab" data-v="settings" style="padding:0;min-height:32px;align-self:flex-start">‹ 설정</button><h1>' + (keepTab ? "계속 보는 단어" : "메모") + "</h1></header>" + tabs +
       (rows ? '<div class="rows">' + rows + "</div>" : '<section class="card-s"><p class="p">' + empty + "</p></section>");
+  }
+
+  /* ---------- 복습 ---------- */
+  // 지금까지 카드로 배운 단어를 다시 본다. 아는 단어로 뺀 단어는 나오지 않는다. 복습 날짜(3일·7일)는 바꾸지 않는다.
+  var RV = { scope: "all", size: 20 };
+  var RV_SIZES = [10, 20, 30, 0];
+  function learnedIds() {
+    return Object.keys(S.words).map(Number).filter(function (id) { return id >= 0 && id < W.length && S.words[id].s !== "k" && seenCard(id); })
+      .sort(function (a, b) { return a - b; });
+  }
+  function reviewScopes() {
+    var all = learnedIds(), since = P.addDays(today, -6);
+    return {
+      all: all,
+      weak: all.filter(function (id) { return S.words[id].s === "l" || isFlagged(id); }),
+      recent: all.filter(function (id) { var w = S.words[id]; return !!(w.in && w.in >= since); })
+    };
+  }
+  function reviewPick() {
+    var ids = shuffle((reviewScopes()[RV.scope] || []).slice());
+    return RV.size ? ids.slice(0, RV.size) : ids;
+  }
+  function reviewHTML() {
+    var sc = reviewScopes(), ids = sc[RV.scope] || [];
+    var head = '<header class="hdr"><span class="hdr-date">카드로 배운 단어 ' + num(sc.all.length) + "개</span><h1>복습</h1></header>";
+    if (!sc.all.length) {
+      return head + '<section class="card-s"><h2 class="card-h">아직 배운 단어가 없어요</h2><p class="meta">오늘 단어를 카드로 보면 여기에서 다시 볼 수 있어요.</p>' +
+        '<div class="btn-row" style="grid-template-columns:1fr"><button class="btn primary" data-act="go" data-v="cards" type="button">오늘 단어 카드로 보기</button></div></section>';
+    }
+    var scopes = [["all", "전체", sc.all.length], ["weak", "아직 못 외움", sc.weak.length], ["recent", "최근 7일", sc.recent.length]];
+    var seg = '<section class="card-s"><div class="seg seg-n" role="group" aria-label="복습할 단어">' + scopes.map(function (x) {
+      return '<button data-act="rvscope" data-v="' + x[0] + '" aria-pressed="' + (RV.scope === x[0]) + '"><span>' + x[1] + "</span><small>" + x[2] + "</small></button>";
+    }).join("") + "</div></section>";
+    var size = '<section class="card-s"><div class="seg" role="group" aria-label="한 번에 볼 단어 수">' + RV_SIZES.map(function (n) {
+      return '<button data-act="rvsize" data-v="' + n + '" aria-pressed="' + (RV.size === n) + '">' + (n ? n : "전체") + "</button>";
+    }).join("") + "</div></section>";
+    var n = RV.size ? Math.min(RV.size, ids.length) : ids.length;
+    var chips = ids.slice(0, 8).map(function (id) { return '<span class="chip" lang="en">' + esc(W[id][0]) + "</span>"; }).join("") +
+      (ids.length > 8 ? '<span class="chip more">+' + (ids.length - 8) + "</span>" : "");
+    return head + '<h2 class="sec-label">복습할 단어</h2>' + seg + '<h2 class="sec-label">한 번에</h2>' + size +
+      (ids.length
+        ? '<section class="card-s"><div class="chips">' + chips + "</div>" +
+            '<div class="btn-col"><button class="btn primary" data-act="rvcards" type="button">카드로 복습 · ' + n + "장</button>" +
+            '<button class="btn" data-act="rvquiz" type="button">퀴즈로 복습 · ' + n + "문제</button></div></section>"
+        : '<section class="card-s"><p class="p">여기에 해당하는 단어가 없어요.</p></section>');
   }
 
   /* ---------- 단어장 ---------- */
@@ -1889,6 +1863,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     if (!p) return;
     var prevS = clone(S), prevN = clone(NOTES);
     S = p.state; NOTES = p.notes;
+    migrate();
     ensurePlanNow();
     writeAll(); saveNotes();
     BK = { tab: "out", text: "", parsed: null, err: "", showText: false };
@@ -1905,11 +1880,10 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     var its = items();
     memoFor = null;
     if (v === "marks-keep" || v === "marks-memo") { ui = { view: "marks", marks: { tab: v === "marks-keep" ? "keep" : "memo" } }; render(); window.scrollTo(0, 0); return; }
-    if (v === "test" || v === "testup") { startTest(v === "testup"); render(); window.scrollTo(0, 0); return; }
     if (v === "backup" || v === "backup-in") { BK = { tab: v === "backup" ? "out" : "in", text: "", parsed: null, err: "", showText: false }; ui = { view: "backup" }; render(); window.scrollTo(0, 0); return; }
     if (v === "known") ui = { view: "known", known: { tab: "pick", sel: {}, limit: 30 } };
     else if (v === "cards") ui = { view: "cards", cards: { i: 0, show: false, done: false } };
-    else if (v === "quiz") ui = { view: "quiz", quiz: buildQuiz(its.map(function (x) { return x.id; })) };
+    else if (v === "quiz") ui = { view: "quiz", quiz: buildQuiz(its.filter(function (x) { return seenCard(x.id); }).map(function (x) { return x.id; })) };
     else if (v === "check") ui = { view: "check", check: { i: 0, show: false, list: false } };
     else ui = { view: v };
     render();
@@ -1953,17 +1927,28 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     }
     if (a === "hideinstall") { M.hideInstall = 1; saveMeta(); render(); return; }
     if (a === "bksnooze") { M.backupSnooze = P.addDays(today, 7); saveMeta(); render(); return; }
-    if (a === "tskip") { save({ placement: { v: 1, skipped: today } }); render(); return; }
     if (a === "snooze") { save({ adapt: { snooze: P.addDays(today, 3) } }); render(); return; }
-    if (a === "easier" || a === "lvl") {
-      var prevS = clone(S), msg = "";
-      if (a === "easier" && v === "perday") { var lo = lowerPerDay(); if (lo) { S = P.replanToday(S, today, lo).state; msg = "하루 새 단어를 " + lo + "개로 줄였어요."; } }
-      else if (a === "easier") { S = P.setLevel(S, today, S.level - 1).state; msg = S.level + "단계로 내렸어요. 오늘 새 단어도 바꿨어요."; }
-      else { S = P.setLevel(S, today, S.level + (+v)).state; msg = S.level + "단계로 바꿨어요. 오늘 새 단어도 바꿨어요."; }
-      if (a === "easier") S.adapt = { snooze: P.addDays(today, 3) };
+    if (a === "easier") {
+      var prevS = clone(S), lo = lowerPerDay();
+      if (!lo) return;
+      S = P.replanToday(S, today, lo).state;
+      S.adapt = { snooze: P.addDays(today, 3) };
       writeAll();
       render();
-      if (msg) toast(msg, function () { S = prevS; writeAll(); render(); });
+      toast("하루 새 단어를 " + lo + "개로 줄였어요.", function () { S = prevS; writeAll(); render(); });
+      return;
+    }
+    // 복습 탭
+    if (a === "rvscope") { RV.scope = v; render(); return; }
+    if (a === "rvsize") { RV.size = +v; render(); return; }
+    if (a === "rvcards" || a === "rvquiz") {
+      var rids = ui.view === "cards" && ui.cards.list ? ui.cards.list.map(function (x) { return x.id; }) : reviewPick();
+      if (!rids.length) return;
+      memoFor = null;
+      if (a === "rvcards") ui = { view: "cards", from: "review", cards: { i: 0, show: false, done: false, list: rids.map(function (id) { return { id: id, kind: "review" }; }) } };
+      else { var rq = buildQuiz(rids); rq.review = true; ui = { view: "quiz", from: "review", quiz: rq }; }
+      render();
+      window.scrollTo(0, 0);
       return;
     }
     if (a === "perday") {
@@ -2018,37 +2003,12 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
       render();
       return;
     }
-    if (ui.view === "test") {
-      var t = ui.test;
-      if (a === "tpick" && !t.done) { var cq = t.qs[t.qi]; answerTest(+v >= 0 && cq.opts[+v] === cq.id); }
-      else if (a === "tstop") finishTest(t);
-      else if (a === "tstart") t.start = Math.max(1, Math.min(P.MAX_LEVEL, t.start + (+v)));
-      else if (a === "tagain") startTest(t.single);
-      else if (a === "tapply") {
-        if (t.single && !t.pass) { save({ adapt: { snooze: P.addDays(today, 3) } }); ui = { view: "home" }; render(); return; }
-        var prev = clone(S), ids = testCorrectIds(t);
-        if (ids.length) S = P.markKnown(S, today, ids);
-        S = P.setLevel(S, today, t.start).state;
-        if (!t.single) S.placement = { v: 1, on: today, level: t.start, right: t.right, total: t.asked };
-        S.adapt = { snooze: P.addDays(today, 3) };
-        writeAll();
-        ui = { view: "home" };
-        render();
-        window.scrollTo(0, 0);
-        toast(t.start + "단계부터 시작해요. 오늘 새 단어도 바꿨어요.", function () { S = prev; writeAll(); render(); });
-        return;
-      }
-      render();
-      return;
-    }
     if (ui.view === "cards") {
-      var its = items(), c = ui.cards;
+      var c = ui.cards;
       if (a === "flip") c.show = !c.show;
       else if (a === "prev" && c.i > 0) { c.i--; c.show = false; }
-      else if (a === "next") {
-        if (c.i < its.length - 1) { c.i++; c.show = false; }
-        else { c.done = true; if (!day().cards) markStudied({ cards: 1 }); }
-      }
+      else if (a === "next") cardsNext();
+      else if (a === "cagain") { c.i = 0; c.show = false; c.done = false; }
       render();
       return;
     }
@@ -2063,10 +2023,13 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
         if (q.i < q.qs.length - 1) { q.i++; q.picked = -1; }
         else {
           q.done = true;
-          if (!q.retry) markStudied({ quiz: { right: q.right, total: q.qs.length, wrong: q.wrong.slice() } });
+          if (q.review) markStudied();
+          else if (!q.retry) markStudied({ quiz: { right: q.right, total: q.qs.length, wrong: q.wrong.slice() } });
         }
       } else if (a === "qretry") {
+        var rv = q.review;
         ui.quiz = buildQuiz(null, q.wrongQs);
+        ui.quiz.review = rv;
       }
       render();
       return;
@@ -2088,6 +2051,15 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
       }
       render();
     }
+  }
+
+  // 다음 카드로. 마지막 카드면 끝 (오늘 카드는 '완료'로, 복습 카드는 공부한 날로만 남긴다)
+  function cardsNext() {
+    var c = ui.cards, its = cardList();
+    if (c.i < its.length - 1) { c.i++; c.show = false; return; }
+    c.done = true;
+    if (c.list) markStudied();
+    else if (!day().cards) markStudied({ cards: 1 });
   }
 
   document.addEventListener("click", function (e) {
@@ -2143,8 +2115,8 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     var dx = e.changedTouches[0].clientX - touchX, dy = e.changedTouches[0].clientY - touchY;
     touchX = null;
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
-    var its = items(), c = ui.cards;
-    if (dx < 0) { if (c.i < its.length - 1) { c.i++; c.show = false; } else { c.done = true; if (!day().cards) markStudied({ cards: 1 }); } }
+    var c = ui.cards;
+    if (dx < 0) cardsNext();
     else if (c.i > 0) { c.i--; c.show = false; }
     render();
   }, { passive: true });

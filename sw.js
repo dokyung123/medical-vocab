@@ -3,7 +3,7 @@
  * 인터넷이 되면 항상 새 파일을 먼저 받고, 안 되면 저장해 둔 파일로 연다.
  * 공부 기록은 여기가 아니라 브라우저 저장소(localStorage)에 있다.
  */
-var CACHE = "medvocab-20261108-cc562e2";
+var CACHE = "medvocab-20261110-2baacb5";
 var FILES = ["./", "index.html", "manifest.webmanifest", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", function (e) {

@@ -413,6 +413,13 @@ details.card-s[open] summary::after { content: "−"; }
 .seg.seg-n small { font-size: 13px; font-weight: 500; color: var(--faint); font-variant-numeric: tabular-nums; }
 .seg.seg-n button[aria-pressed="true"] small { color: var(--accent); }
 
+/* 복습: 건너뛴 단계 열기 */
+.rv-lv { display: flex; flex-direction: column; gap: 8px; }
+.rv-lv button { appearance: none; border: 0; cursor: pointer; min-height: 50px; border-radius: 12px; padding: 0 14px; background: var(--surface-2); color: var(--ink); display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; text-align: left; }
+.rv-lv button small { font-size: 14px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rv-lv button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.rv-lv button[aria-pressed="true"] small { color: var(--accent-ink); opacity: .8; }
+
 #app { padding-top: calc(env(safe-area-inset-top, 0px) + 6px); }
 </style>
 </head>
@@ -754,7 +761,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
   "use strict";
   var W = window.WORDS, CATS = window.CATS, P = window.Planner;
   // W[id] = [영어, 한국어 뜻, 단어 구성, 분류 번호, 영어 예문, 한국어 해석, 단계]
-  var VERSION = "20261108-cc562e2";
+  var VERSION = "20261110-2baacb5";
   var KIND = { "new": "새 단어", again: "다시 보기", review: "복습", keep: "계속 보기" };
   var LEVEL_NAMES = { 1: "구성 요소", 2: "몸의 구조와 방향", 3: "계통별 용어", 4: "증상·진단·검사", 5: "수술·처치·약물", 6: "의학 약어", 7: "보건의료 행정" };
   function lvName(l) { return l + "단계 · " + LEVEL_NAMES[l]; }
@@ -1490,7 +1497,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
         "<li>다시 볼 단어가 많이 밀리면 그날 새 단어를 줄여요. 하루 총량은 새 단어 수의 3배쯤이에요.</li>" +
         "<li>3일 연속 새 단어를 절반도 못 외우면 하루 새 단어 줄이기를 제안해요.</li>" +
         "<li>퀴즈에는 카드로 본 단어만 나와요. 이미 배운 구성 요소(접두사·접미사·결합형)의 뜻을 묻는 문제가 섞여 나와요.</li>" +
-        "<li>복습 탭에서는 지금까지 카드로 배운 단어를 다시 볼 수 있어요. 복습 탭에서 한 공부는 복습 날짜를 바꾸지 않아요.</li>" +
+        "<li>복습 탭에서는 지금까지 카드로 배운 단어를 다시 볼 수 있어요. 수준 테스트로 건너뛴 단계가 있으면 그 단계 단어도 복습 탭에서 바로 볼 수 있어요. 복습 탭에서 한 공부는 복습 날짜를 바꾸지 않아요.</li>" +
         "<li>공부 기록은 이 휴대폰에만 저장돼요. 휴대폰을 바꾸거나 Safari 방문 기록과 웹사이트 데이터를 지우기 전에 백업을 내보내세요.</li>" +
       "</ul></details>" +
       '<p class="ver">버전 ' + esc(VERSION) + "</p>";
@@ -1539,28 +1546,48 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
 
   /* ---------- 복습 ---------- */
   // 지금까지 카드로 배운 단어를 다시 본다. 아는 단어로 뺀 단어는 나오지 않는다. 복습 날짜(3일·7일)는 바꾸지 않는다.
+  // 수준 테스트나 단계 올리기로 건너뛴 단계가 있으면, 그 단계의 단어는 아직 안 배웠어도 복습에서 열어 둔다.
   var RV = { scope: "all", size: 20 };
   var RV_SIZES = [10, 20, 30, 0];
   function learnedIds() {
     return Object.keys(S.words).map(Number).filter(function (id) { return id >= 0 && id < W.length && S.words[id].s !== "k" && seenCard(id); })
       .sort(function (a, b) { return a - b; });
   }
+  // 건너뛴 단계: 더 높은 단계 단어를 이미 배웠는데, 아직 한 번도 나오지 않은 단어가 남아 있는 낮은 단계
+  function skippedLevels() {
+    var top = 0, missing = {};
+    W.forEach(function (w, id) {
+      var st = S.words[id];
+      if (st && st.s !== "k") top = Math.max(top, w[6]);
+      else if (!st) missing[w[6]] = 1;
+    });
+    var out = [];
+    for (var L = 1; L < top; L++) if (missing[L]) out.push(L);
+    return out;
+  }
   function reviewScopes() {
     var all = learnedIds(), since = P.addDays(today, -6);
-    return {
+    var sc = {
       all: all,
       weak: all.filter(function (id) { return S.words[id].s === "l" || isFlagged(id); }),
-      recent: all.filter(function (id) { var w = S.words[id]; return !!(w.in && w.in >= since); })
+      recent: all.filter(function (id) { var w = S.words[id]; return !!(w.in && w.in >= since); }),
+      skipped: skippedLevels()
     };
+    sc.skipped.forEach(function (L) {
+      sc["L" + L] = W.map(function (w, id) { return id; }).filter(function (id) { return W[id][6] === L && !(S.words[id] && S.words[id].s === "k"); });
+    });
+    return sc;
   }
   function reviewPick() {
     var ids = shuffle((reviewScopes()[RV.scope] || []).slice());
     return RV.size ? ids.slice(0, RV.size) : ids;
   }
   function reviewHTML() {
-    var sc = reviewScopes(), ids = sc[RV.scope] || [];
+    var sc = reviewScopes();
+    if (!sc[RV.scope] || RV.scope === "skipped") RV.scope = "all";
+    var ids = sc[RV.scope];
     var head = '<header class="hdr"><span class="hdr-date">카드로 배운 단어 ' + num(sc.all.length) + "개</span><h1>복습</h1></header>";
-    if (!sc.all.length) {
+    if (!sc.all.length && !sc.skipped.length) {
       return head + '<section class="card-s"><h2 class="card-h">아직 배운 단어가 없어요</h2><p class="meta">오늘 단어를 카드로 보면 여기에서 다시 볼 수 있어요.</p>' +
         '<div class="btn-row" style="grid-template-columns:1fr"><button class="btn primary" data-act="go" data-v="cards" type="button">오늘 단어 카드로 보기</button></div></section>';
     }
@@ -1568,13 +1595,18 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     var seg = '<section class="card-s"><div class="seg seg-n" role="group" aria-label="복습할 단어">' + scopes.map(function (x) {
       return '<button data-act="rvscope" data-v="' + x[0] + '" aria-pressed="' + (RV.scope === x[0]) + '"><span>' + x[1] + "</span><small>" + x[2] + "</small></button>";
     }).join("") + "</div></section>";
+    var skipped = !sc.skipped.length ? "" : '<h2 class="sec-label">건너뛴 단계</h2><section class="card-s"><div class="rv-lv" role="group" aria-label="건너뛴 단계">' +
+      sc.skipped.map(function (L) {
+        var k = "L" + L;
+        return '<button data-act="rvscope" data-v="' + k + '" aria-pressed="' + (RV.scope === k) + '" type="button"><span>' + lvName(L) + "</span><small>" + num(sc[k].length) + "개</small></button>";
+      }).join("") + "</div></section>";
     var size = '<section class="card-s"><div class="seg" role="group" aria-label="한 번에 볼 단어 수">' + RV_SIZES.map(function (n) {
       return '<button data-act="rvsize" data-v="' + n + '" aria-pressed="' + (RV.size === n) + '">' + (n ? n : "전체") + "</button>";
     }).join("") + "</div></section>";
     var n = RV.size ? Math.min(RV.size, ids.length) : ids.length;
     var chips = ids.slice(0, 8).map(function (id) { return '<span class="chip" lang="en">' + esc(W[id][0]) + "</span>"; }).join("") +
       (ids.length > 8 ? '<span class="chip more">+' + (ids.length - 8) + "</span>" : "");
-    return head + '<h2 class="sec-label">복습할 단어</h2>' + seg + '<h2 class="sec-label">한 번에</h2>' + size +
+    return head + '<h2 class="sec-label">복습할 단어</h2>' + seg + skipped + '<h2 class="sec-label">한 번에</h2>' + size +
       (ids.length
         ? '<section class="card-s"><div class="chips">' + chips + "</div>" +
             '<div class="btn-col"><button class="btn primary" data-act="rvcards" type="button">카드로 복습 · ' + n + "장</button>" +

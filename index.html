@@ -784,7 +784,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
   "use strict";
   var W = window.WORDS, CATS = window.CATS, P = window.Planner;
   // W[id] = [영어, 한국어 뜻, 단어 구성, 분류 번호, 영어 예문, 한국어 해석, 단계]
-  var VERSION = "20261117-fbf44a3";
+  var VERSION = "20261118-8156d9e";
   var KIND = { "new": "새 단어", again: "다시 보기", review: "복습", keep: "계속 보기" };
   var LEVEL_NAMES = { 1: "구성 요소", 2: "몸의 구조와 방향", 3: "계통별 용어", 4: "증상·진단·검사", 5: "수술·처치·약물", 6: "의학 약어", 7: "보건의료 행정" };
   function lvName(l) { return l + "단계 · " + LEVEL_NAMES[l]; }
@@ -1532,7 +1532,8 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
         "<li>다시 볼 단어가 많이 밀리면 그날 새 단어를 줄여요. 하루 총량은 새 단어 수의 3배쯤이에요.</li>" +
         "<li>3일 연속 새 단어를 절반도 못 외우면 하루 새 단어 줄이기를 제안해요.</li>" +
         "<li>퀴즈에는 카드로 본 단어만 나와요. 이미 배운 구성 요소(접두사·접미사·결합형)의 뜻을 묻는 문제가 섞여 나와요.</li>" +
-        "<li>복습 탭과 스펠링은 ‘범위’에서 단계를 여러 개 골라 섞어서 봐요. 카드로 배운 단어만 나오고, 수준 테스트로 건너뛴 단계는 안 배운 단어까지 나와요. 건너뛴 단계의 안 배운 단어를 복습 퀴즈에서 맞히면 아는 단어로 빠져요.</li>" +
+        "<li>복습 탭과 스펠링에는 어제까지 배운 단어 중 아직 ‘완전히 외움’이 아닌 단어가 나와요. 오늘 배운 단어는 내일부터 나오고, 7일 복습까지 외우면 빠져요. ‘계속 보기’ 단어는 늘 나와요.</li>" +
+        "<li>‘범위’에서 단계를 여러 개 골라 섞어서 봐요. 수준 테스트로 건너뛴 단계는 안 배운 단어까지 나와요. 건너뛴 단계의 안 배운 단어를 복습 퀴즈에서 맞히면 아는 단어로 빠져요.</li>" +
         "<li>복습 탭에서 한 공부는 오늘 단어와 복습 날짜를 바꾸지 않아요.</li>" +
         "<li>공부 기록은 이 휴대폰에만 저장돼요. 휴대폰을 바꾸거나 Safari 방문 기록과 웹사이트 데이터를 지우기 전에 백업을 내보내세요.</li>" +
       "</ul></details>" +
@@ -1582,7 +1583,9 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
 
   /* ---------- 복습 ---------- */
   // 범위(단계 여러 개)를 골라 섞어서 본다. 복습 날짜(3일·7일)와 오늘 단어는 바꾸지 않는다.
-  // 건너뛴 단계는 안 배운 단어까지 나오고(아는 단어 빼고), 나머지 단계는 카드로 배운 단어만 나온다.
+  // 복습할 단어: 어제까지 배운 단어 중 아직 '완전히 외움'이 아닌 단어(외우는 중 + 3일·7일 복습 중) + '계속 보기' 단어.
+  //   오늘 새 단어는 내일부터 들어가고, 7일 복습까지 외우면 빠진다. 그래서 끝없이 늘지 않는다.
+  // 건너뛴 단계는 이 기준과 별개로 안 배운 단어까지 나온다(아는 단어 빼고).
   // 복습 퀴즈에서 건너뛴 단계의 안 배운 단어를 맞히면 아는 단어로 빼서 복습에 다시 안 나온다.
   var RV_KEY = "medvocab:v1:ui";
   var RV_SIZES = [10, 20, 30, 0];
@@ -1595,10 +1598,10 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     }
     return { levels: lv, f: "all", size: 20, open: false };
   })();
-  function learnedIds() {
-    return Object.keys(S.words).map(Number).filter(function (id) { return id >= 0 && id < W.length && S.words[id].s !== "k" && seenCard(id); })
-      .sort(function (a, b) { return a - b; });
-  }
+  function reviewWord(w) { return !!w && (w.s === "l" || w.s === "r") && !!w.in && w.in < today; }
+  // '계속 보기' 단어는 다 외웠거나 오늘 새 단어여도 늘 복습에 나온다 (아는 단어는 빼고).
+  function inReview(id, w) { return !(w && w.s === "k") && (reviewWord(w) || isFlagged(id)); }
+  function reviewCount() { var n = 0; for (var id = 0; id < W.length; id++) if (inReview(id, S.words[id])) n++; return n; }
   // 건너뛴 단계: 더 높은 단계 단어를 이미 배웠는데, 아직 한 번도 나오지 않은 단어가 남아 있는 낮은 단계
   function skippedLevels() {
     var top = 0, missing = {};
@@ -1638,18 +1641,18 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
   }
   function reviewPool(levels, f) {
     levels = levels || selLevels(); f = f || RV.f;
-    var sk = skipSet(), since = P.addDays(today, -6), out = [];
+    var sk = skipSet(), out = [];
     for (var id = 0; id < W.length; id++) {
       var L = W[id][6];
       if (!levels[L]) continue;
-      var w = S.words[id];
+      var w = S.words[id], ok;
       if (w && w.s === "k") continue;
-      if (f === "keep") { if (isFlagged(id)) out.push(id); continue; }
-      var learned = !!w && seenCard(id);
-      if (!learned && !sk[L]) continue;
-      if (f === "weak" && !(learned && w.s === "l")) continue;
-      if (f === "recent" && !(learned && w.in && w.in >= since)) continue;
-      out.push(id);
+      if (f === "keep") ok = isFlagged(id);                          // 계속 보기: 다 외운 단어도
+      else if (f === "done") ok = !!w && (w.s === "r" || w.s === "m"); // 외운 단어: 3·7일 복습 중 + 완전히 외움
+      else if (f === "weak") ok = reviewWord(w) && w.s === "l";       // 못 외움
+      else if (sk[L]) ok = true;                                       // 건너뛴 단계: 안 배운 단어까지
+      else ok = inReview(id, w);
+      if (ok) out.push(id);
     }
     return out;
   }
@@ -1674,14 +1677,15 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     return '<section class="rg">' + head + '<div class="rg-grid">' + grid + "</div></section>";
   }
   function reviewHTML() {
-    var sk = skipSet(), all = learnedIds();
-    var head = '<header class="hdr"><span class="hdr-date">카드로 배운 단어 ' + num(all.length) + "개</span><h1>복습</h1></header>";
-    if (!all.length && !Object.keys(sk).length && !flagIds().length) {
-      return head + '<section class="card-s"><h2 class="card-h">아직 배운 단어가 없어요</h2><p class="meta">오늘 단어를 카드로 보면 여기에서 다시 볼 수 있어요.</p>' +
-        '<div class="btn-row" style="grid-template-columns:1fr"><button class="btn primary" data-act="go" data-v="cards" type="button">오늘 단어 카드로 보기</button></div></section>';
+    var sk = skipSet(), rc = reviewCount();
+    var head = '<header class="hdr"><span class="hdr-date">복습할 단어 ' + num(rc) + "개</span><h1>복습</h1></header>";
+    var anyDone = Object.keys(S.words).some(function (k) { var s = S.words[k].s; return s === "r" || s === "m"; });
+    if (!rc && !Object.keys(sk).length && !flagIds().length && !anyDone) {
+      return head + '<section class="card-s"><h2 class="card-h">아직 복습할 단어가 없어요</h2><p class="meta">오늘 배운 단어는 내일부터 여기에 나와요.</p></section>';
     }
     var ids = reviewPool();
-    var filters = [["all", "전체"], ["weak", "못 외움"], ["recent", "최근 7일"], ["keep", "계속 보기"]];
+    if (RV.f === "recent") RV.f = "all";
+    var filters = [["all", "전체"], ["weak", "못 외움"], ["done", "외운 단어"], ["keep", "계속 보기"]];
     var seg = '<section class="card-s"><div class="seg seg-n" role="group" aria-label="복습할 단어">' + filters.map(function (x) {
       return '<button data-act="rvf" data-v="' + x[0] + '" aria-pressed="' + (RV.f === x[0]) + '"><span>' + x[1] + "</span><small>" + num(reviewPool(null, x[0]).length) + "</small></button>";
     }).join("") + "</div></section>";
@@ -1700,6 +1704,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
             (fresh.length ? '<p class="meta" style="margin:0">' + levelsLabel(fresh) + "에서 안 배운 단어는 퀴즈에서 맞히면 복습에서 빠져요</p>" : "") +
             '<div class="btn-col"><button class="btn primary" data-act="rvcards" type="button">카드로 복습 · ' + n + "장</button>" +
             '<button class="btn" data-act="rvquiz" type="button">퀴즈로 복습 · ' + n + "문제</button></div></section>"
+        : RV.f === "all" ? '<section class="card-s"><h2 class="card-h">아직 복습할 단어가 없어요</h2><p class="meta">오늘 배운 단어는 내일부터 여기에 나와요.</p></section>'
         : '<section class="card-s"><p class="p">여기에 해당하는 단어가 없어요.</p></section>';
     return head + rangeHTML(reviewPool) + '<h2 class="sec-label">복습할 단어</h2>' + seg + '<h2 class="sec-label">한 번에</h2>' + size + body;
   }
@@ -1782,17 +1787,15 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     var h = spellHide();
     return Object.keys(h).filter(function (k) { return h[k]; }).map(Number).sort(function (a, b) { return a - b; });
   }
-  // 복습 탭과 같은 범위를 쓴다. 건너뛴 단계는 안 배운 단어까지(아는 단어 빼고), 나머지는 본 단어·외운 단어·아는 단어.
+  // 복습 탭과 같은 범위와 기준을 쓴다: 어제까지 배운 단어 중 아직 '완전히 외움'이 아닌 단어. 건너뛴 단계는 안 배운 단어까지(아는 단어 빼고).
   function spellPool(levels) {
     levels = levels || selLevels();
-    var hide = spellHide(), sk = skipSet(), d = day(), sawToday = !!(d && (d.cards || d.quiz)), out = [];
+    var hide = spellHide(), sk = skipSet(), out = [];
     for (var id = 0; id < W.length; id++) {
       var L = W[id][6], w = S.words[id];
       if (hide[id] || !levels[L]) continue;
       if (sk[L]) { if (!w || w.s !== "k") out.push(id); }
-      else if (!w) continue;
-      else if (w.s === "k" || w.s === "r" || w.s === "m") out.push(id);
-      else if (w.s === "l" && ((w.in && w.in < today) || sawToday || (d && d.checks && d.checks[id]))) out.push(id);
+      else if (inReview(id, w)) out.push(id);
     }
     return out;
   }
@@ -1854,8 +1857,7 @@ window.WORDS=[["a-","없음, 아님","a- 없음 + -pnea 호흡 = apnea 무호흡
     if (SPL.id < 0) {
       if (!selList().length) return head + '<section class="card-s"><p class="p">범위를 골라 주세요.</p></section>';
       return head + '<section class="card-s"><h2 class="card-h">아직 연습할 단어가 없어요</h2>' +
-        '<p class="meta">카드로 본 단어, 외운 단어, 아는 단어로 뺀 단어가 여기에 나와요.</p>' +
-        '<div class="btn-row" style="grid-template-columns:1fr"><button class="btn primary" data-act="go" data-v="cards" type="button">오늘 단어 카드로 보기</button></div></section>' +
+        '<p class="meta">오늘 배운 단어는 내일부터 여기에 나와요.</p></section>' +
         (hid.length ? '<button class="link" data-act="splist" type="button">숨긴 단어 ' + hid.length + "개</button>" : "");
     }
     var id = SPL.id, w = W[id], answered = SPL.state !== "ask", good = SPL.state === "ok";
